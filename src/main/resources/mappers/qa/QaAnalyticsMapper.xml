@@ -1,0 +1,250 @@
+﻿<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.argus.rag.qa.mapper.QaAnalyticsMapper">
+
+    <resultMap id="qaRecordEntityMap" type="com.argus.rag.qa.model.entity.QaRecordEntity">
+        <id property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="groupId" column="group_id"/>
+        <result property="question" column="question"/>
+        <result property="answer" column="answer"/>
+        <result property="answered" column="answered"/>
+        <result property="reasonCode" column="reason_code"/>
+        <result property="reasonMessage" column="reason_message"/>
+        <result property="evidenceLevel" column="evidence_level"/>
+        <result property="citationCount" column="citation_count"/>
+        <result property="promptTokens" column="prompt_tokens"/>
+        <result property="completionTokens" column="completion_tokens"/>
+        <result property="totalTokens" column="total_tokens"/>
+        <result property="isEstimated" column="is_estimated"/>
+        <result property="latencyMs" column="latency_ms"/>
+        <result property="modelName" column="model_name"/>
+        <result property="endpoint" column="endpoint"/>
+        <result property="success" column="success"/>
+        <result property="errorMessage" column="error_message"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="deletedAt" column="deleted_at"/>
+        <result property="deletedBy" column="deleted_by"/>
+        <result property="deleteReason" column="delete_reason"/>
+    </resultMap>
+
+    <sql id="baseVisibilityPredicate">
+        r.deleted_at IS NULL
+        <choose>
+            <when test="scopeCtx.scope.name() == 'GLOBAL'">
+                AND 1 = 1
+            </when>
+            <when test="scopeCtx.scope.name() == 'GROUP'">
+                AND r.group_id = #{scopeCtx.groupId}
+            </when>
+            <otherwise>
+                AND r.user_id = #{scopeCtx.currentUserId}
+                <if test="scopeCtx.groupId != null">
+                    AND r.group_id = #{scopeCtx.groupId}
+                </if>
+            </otherwise>
+        </choose>
+    </sql>
+
+    <sql id="filterPredicate">
+        <include refid="baseVisibilityPredicate"/>
+        <if test="q != null">
+            <if test="q.userId != null and scopeCtx.scope.name() != 'SELF'">
+                AND r.user_id = #{q.userId}
+            </if>
+            <if test="q.answered != null">
+                AND r.answered = #{q.answered}
+            </if>
+            <if test="q.success != null">
+                AND r.success = #{q.success}
+            </if>
+            <if test="q.evidenceLevel != null and q.evidenceLevel != ''">
+                AND r.evidence_level = #{q.evidenceLevel}
+            </if>
+            <if test="q.modelName != null and q.modelName != ''">
+                AND r.model_name = #{q.modelName}
+            </if>
+            <if test="q.endpoint != null and q.endpoint != ''">
+                AND r.endpoint = #{q.endpoint}
+            </if>
+            <if test="q.from != null">
+                AND r.created_at &gt;= #{q.from}
+            </if>
+            <if test="q.to != null">
+                AND r.created_at &lt;= #{q.to}
+            </if>
+            <if test="q.keyword != null and q.keyword != ''">
+                AND (
+                    r.question ILIKE CONCAT('%', #{q.keyword}, '%')
+                    OR COALESCE(r.answer, '') ILIKE CONCAT('%', #{q.keyword}, '%')
+                    OR COALESCE(r.reason_message, '') ILIKE CONCAT('%', #{q.keyword}, '%')
+                    OR COALESCE(r.error_message, '') ILIKE CONCAT('%', #{q.keyword}, '%')
+                    OR EXISTS (
+                        SELECT 1
+                        FROM qa_record_citations c
+                        WHERE c.qa_record_id = r.id
+                          AND (
+                              c.file_name ILIKE CONCAT('%', #{q.keyword}, '%')
+                              OR COALESCE(c.snippet, '') ILIKE CONCAT('%', #{q.keyword}, '%')
+                          )
+                    )
+                )
+            </if>
+        </if>
+    </sql>
+
+    <sql id="recordColumns">
+        r.id,
+        r.user_id,
+        r.group_id,
+        r.question,
+        r.answer,
+        r.answered,
+        r.reason_code,
+        r.reason_message,
+        r.evidence_level,
+        r.citation_count,
+        r.prompt_tokens,
+        r.completion_tokens,
+        r.total_tokens,
+        r.is_estimated,
+        r.latency_ms,
+        r.model_name,
+        r.endpoint,
+        r.success,
+        r.error_message,
+        r.created_at,
+        r.deleted_at,
+        r.deleted_by,
+        r.delete_reason
+    </sql>
+
+    <select id="selectSummary" resultType="com.argus.rag.qa.model.vo.QaAnalyticsSummaryVO">
+        SELECT COUNT(1) AS "totalQuestions",
+               COALESCE(SUM(CASE WHEN r.answered = TRUE AND r.success = TRUE THEN 1 ELSE 0 END), 0) AS "answeredCount",
+               COALESCE(SUM(CASE WHEN r.answered = FALSE AND r.success = TRUE THEN 1 ELSE 0 END), 0) AS "refusalCount",
+               COALESCE(SUM(CASE WHEN r.answered = FALSE AND r.success = FALSE THEN 1 ELSE 0 END), 0) AS "failureCount",
+               COALESCE(AVG(r.latency_ms), 0) AS "avgLatencyMs",
+               COALESCE(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY r.latency_ms), 0) AS "p95LatencyMs",
+               COALESCE(SUM(r.prompt_tokens), 0) AS "totalPromptTokens",
+               COALESCE(SUM(r.completion_tokens), 0) AS "totalCompletionTokens",
+               COALESCE(SUM(r.total_tokens), 0) AS "totalTokens",
+               ROUND(COALESCE(SUM((r.prompt_tokens * 2.0 + r.completion_tokens * 6.0) / 1000000.0), 0), 6) AS "estimatedCost"
+        FROM qa_records r
+        WHERE <include refid="filterPredicate"/>
+    </select>
+
+    <select id="selectTrends" resultType="com.argus.rag.qa.model.vo.QaTrendPointVO">
+        SELECT TO_CHAR(DATE_TRUNC('day', r.created_at), 'YYYY-MM-DD') AS "date",
+               COUNT(1) AS "totalQuestions",
+               COALESCE(SUM(CASE WHEN r.answered = TRUE AND r.success = TRUE THEN 1 ELSE 0 END), 0) AS "answeredCount",
+               COALESCE(SUM(CASE WHEN r.answered = FALSE AND r.success = TRUE THEN 1 ELSE 0 END), 0) AS "refusalCount",
+               COALESCE(SUM(CASE WHEN r.answered = FALSE AND r.success = FALSE THEN 1 ELSE 0 END), 0) AS "failureCount",
+               COALESCE(SUM(r.total_tokens), 0) AS "totalTokens",
+               ROUND(COALESCE(SUM((r.prompt_tokens * 2.0 + r.completion_tokens * 6.0) / 1000000.0), 0), 6) AS "estimatedCost",
+               COALESCE(AVG(r.latency_ms), 0) AS "avgLatencyMs"
+        FROM qa_records r
+        WHERE <include refid="filterPredicate"/>
+        GROUP BY DATE_TRUNC('day', r.created_at)
+        ORDER BY DATE_TRUNC('day', r.created_at)
+    </select>
+
+    <select id="selectEvidenceLevels" resultType="com.argus.rag.qa.model.vo.QaDimensionItemVO">
+        SELECT COALESCE(r.evidence_level, 'UNKNOWN') AS "name",
+               COUNT(1) AS "count",
+               COALESCE(SUM(r.total_tokens), 0) AS "totalTokens",
+               ROUND(COALESCE(SUM((r.prompt_tokens * 2.0 + r.completion_tokens * 6.0) / 1000000.0), 0), 6) AS "estimatedCost"
+        FROM qa_records r
+        WHERE <include refid="filterPredicate"/>
+        GROUP BY COALESCE(r.evidence_level, 'UNKNOWN')
+        ORDER BY COUNT(1) DESC
+    </select>
+
+    <select id="selectModels" resultType="com.argus.rag.qa.model.vo.QaDimensionItemVO">
+        SELECT COALESCE(r.model_name, 'UNKNOWN') AS "name",
+               COUNT(1) AS "count",
+               COALESCE(SUM(r.total_tokens), 0) AS "totalTokens",
+               ROUND(COALESCE(SUM((r.prompt_tokens * 2.0 + r.completion_tokens * 6.0) / 1000000.0), 0), 6) AS "estimatedCost"
+        FROM qa_records r
+        WHERE <include refid="filterPredicate"/>
+        GROUP BY COALESCE(r.model_name, 'UNKNOWN')
+        ORDER BY COUNT(1) DESC
+        LIMIT 20
+    </select>
+
+    <select id="selectEndpoints" resultType="com.argus.rag.qa.model.vo.QaDimensionItemVO">
+        SELECT COALESCE(r.endpoint, 'UNKNOWN') AS "name",
+               COUNT(1) AS "count",
+               COALESCE(SUM(r.total_tokens), 0) AS "totalTokens",
+               ROUND(COALESCE(SUM((r.prompt_tokens * 2.0 + r.completion_tokens * 6.0) / 1000000.0), 0), 6) AS "estimatedCost"
+        FROM qa_records r
+        WHERE <include refid="filterPredicate"/>
+        GROUP BY COALESCE(r.endpoint, 'UNKNOWN')
+        ORDER BY COUNT(1) DESC
+    </select>
+
+    <select id="selectRetrievalSources" resultType="com.argus.rag.qa.model.vo.QaDimensionItemVO">
+        SELECT COALESCE(c.retrieval_source, 'UNKNOWN') AS "name",
+               COUNT(1) AS "count",
+               0 AS "totalTokens",
+               0 AS "estimatedCost"
+        FROM qa_record_citations c
+        INNER JOIN qa_records r ON r.id = c.qa_record_id
+        WHERE <include refid="filterPredicate"/>
+        GROUP BY COALESCE(c.retrieval_source, 'UNKNOWN')
+        ORDER BY COUNT(1) DESC
+    </select>
+
+    <select id="selectUsers" resultType="com.argus.rag.qa.model.vo.QaDimensionItemVO">
+        SELECT CONCAT('鐢ㄦ埛 ', r.user_id) AS "name",
+               COUNT(1) AS "count",
+               COALESCE(SUM(r.total_tokens), 0) AS "totalTokens",
+               ROUND(COALESCE(SUM((r.prompt_tokens * 2.0 + r.completion_tokens * 6.0) / 1000000.0), 0), 6) AS "estimatedCost"
+        FROM qa_records r
+        WHERE <include refid="filterPredicate"/>
+        GROUP BY r.user_id
+        ORDER BY COUNT(1) DESC
+        LIMIT 20
+    </select>
+
+    <select id="selectSearchRecords" resultMap="qaRecordEntityMap">
+        SELECT <include refid="recordColumns"/>
+        FROM qa_records r
+        WHERE <include refid="filterPredicate"/>
+        ORDER BY r.created_at DESC, r.id DESC
+        LIMIT #{limit}
+        OFFSET #{offset}
+    </select>
+
+    <select id="countSearchRecords" resultType="java.lang.Long">
+        SELECT COUNT(1)
+        FROM qa_records r
+        WHERE <include refid="filterPredicate"/>
+    </select>
+
+    <select id="selectRecordsByIds" resultMap="qaRecordEntityMap">
+        SELECT <include refid="recordColumns"/>
+        FROM qa_records r
+        WHERE <include refid="baseVisibilityPredicate"/>
+          AND r.id IN
+          <foreach collection="recordIds" item="id" open="(" separator="," close=")">
+              #{id}
+          </foreach>
+        ORDER BY r.created_at DESC, r.id DESC
+        LIMIT #{limit}
+    </select>
+
+    <update id="softDeleteByIds">
+        UPDATE qa_records r
+        SET deleted_at = now(),
+            deleted_by = #{scopeCtx.currentUserId},
+            delete_reason = #{deleteReason}
+        WHERE <include refid="baseVisibilityPredicate"/>
+          AND r.id IN
+          <foreach collection="recordIds" item="id" open="(" separator="," close=")">
+              #{id}
+          </foreach>
+    </update>
+</mapper>
