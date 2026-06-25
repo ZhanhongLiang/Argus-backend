@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.argus.rag.document.readiness.mapper.TopicProfileMapper">
+
+    <select id="selectGroupProfile" resultType="map">
+        select id,
+               group_name as groupName,
+               description
+        from groups
+        where id = #{groupId}
+          and status = 'ACTIVE'
+    </select>
+
+    <select id="selectReadyDocumentNames" resultType="string">
+        select file_name
+        from documents
+        where group_id = #{groupId}
+          and status = 'READY'
+          and deleted = false
+        order by updated_at desc
+        limit 20
+    </select>
+</mapper>

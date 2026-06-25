@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.argus.rag.document.readiness.mapper.DocumentReadinessBatchMapper">
+
+    <select id="selectReadableBatches" resultType="com.argus.rag.document.readiness.model.vo.DocumentReadinessBatchVO">
+        select b.id,
+               b.group_id as groupId,
+               g.group_name as groupName,
+               b.owner_user_id as ownerUserId,
+               u.display_name as ownerDisplayName,
+               b.batch_name as batchName,
+               b.status,
+               b.total_count as totalCount,
+               b.ready_count as readyCount,
+               b.warning_count as warningCount,
+               b.rejected_count as rejectedCount,
+               b.avg_readiness_score as avgReadinessScore,
+               b.failure_reason as failureReason,
+               b.approved_by_user_id as approvedByUserId,
+               b.approved_at as approvedAt,
+               b.created_at as createdAt,
+               b.updated_at as updatedAt
+        from document_readiness_batches b
+        inner join groups g on g.id = b.group_id
+        inner join users u on u.id = b.owner_user_id
+        <if test="systemAdmin == false">
+            inner join group_memberships gm on gm.group_id = b.group_id and gm.user_id = #{currentUserId}
+        </if>
+        where g.status = 'ACTIVE'
+        <if test="query.groupId != null">
+            and b.group_id = #{query.groupId}
+        </if>
+        <if test="query.status != null and query.status != ''">
+            and b.status = #{query.status}
+        </if>
+        order by b.created_at desc, b.id desc
+    </select>
+
+    <select id="selectReadableBatchDetail" resultType="com.argus.rag.document.readiness.model.vo.DocumentReadinessBatchVO">
+        select b.id,
+               b.group_id as groupId,
+               g.group_name as groupName,
+               b.owner_user_id as ownerUserId,
+               u.display_name as ownerDisplayName,
+               b.batch_name as batchName,
+               b.status,
+               b.total_count as totalCount,
+               b.ready_count as readyCount,
+               b.warning_count as warningCount,
+               b.rejected_count as rejectedCount,
+               b.avg_readiness_score as avgReadinessScore,
+               b.failure_reason as failureReason,
+               b.approved_by_user_id as approvedByUserId,
+               b.approved_at as approvedAt,
+               b.created_at as createdAt,
+               b.updated_at as updatedAt
+        from document_readiness_batches b
+        inner join groups g on g.id = b.group_id
+        inner join users u on u.id = b.owner_user_id
+        <if test="systemAdmin == false">
+            inner join group_memberships gm on gm.group_id = b.group_id and gm.user_id = #{currentUserId}
+        </if>
+        where b.id = #{batchId}
+          and g.status = 'ACTIVE'
+        limit 1
+    </select>
+</mapper>

@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.argus.rag.document.readiness.mapper.DocumentReadinessSchemaMapper">
+
+    <update id="createBatchesTable">
+        CREATE TABLE IF NOT EXISTS document_readiness_batches (
+            id BIGSERIAL PRIMARY KEY,
+            group_id BIGINT NOT NULL,
+            owner_user_id BIGINT NOT NULL,
+            batch_name VARCHAR(128) NOT NULL,
+            status VARCHAR(32) NOT NULL DEFAULT 'CREATED',
+            total_count INTEGER NOT NULL DEFAULT 0,
+            ready_count INTEGER NOT NULL DEFAULT 0,
+            warning_count INTEGER NOT NULL DEFAULT 0,
+            rejected_count INTEGER NOT NULL DEFAULT 0,
+            avg_readiness_score DECIMAL(5,2),
+            failure_reason TEXT,
+            approved_by_user_id BIGINT,
+            approved_at TIMESTAMP,
+            created_at TIMESTAMP NOT NULL DEFAULT now(),
+            updated_at TIMESTAMP NOT NULL DEFAULT now(),
+            CONSTRAINT fk_readiness_batch_group FOREIGN KEY (group_id) REFERENCES groups (id),
+            CONSTRAINT fk_readiness_batch_owner FOREIGN KEY (owner_user_id) REFERENCES users (id),
+            CONSTRAINT fk_readiness_batch_approver FOREIGN KEY (approved_by_user_id) REFERENCES users (id)
+        )
+    </update>
+
+    <update id="createItemsTable">
+        CREATE TABLE IF NOT EXISTS document_readiness_items (
+            id BIGSERIAL PRIMARY KEY,
+            batch_id BIGINT NOT NULL,
+            group_id BIGINT NOT NULL,
+            original_file_name VARCHAR(512) NOT NULL,
+            file_ext VARCHAR(32) NOT NULL DEFAULT '',
+            file_size BIGINT NOT NULL DEFAULT 0,
+            content_type VARCHAR(128) NOT NULL DEFAULT '',
+            file_hash VARCHAR(128) NOT NULL DEFAULT '',
+            storage_bucket VARCHAR(128) NOT NULL DEFAULT '',
+            storage_object_key VARCHAR(512) NOT NULL DEFAULT '',
+            parse_status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+            readiness_status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+            recommended_group_id BIGINT,
+            recommended_action VARCHAR(64),
+            readiness_score DECIMAL(5,2),
+            readiness_grade VARCHAR(32),
+            parseable BOOLEAN NOT NULL DEFAULT FALSE,
+            chunk_count INTEGER NOT NULL DEFAULT 0,
+            avg_chunk_length INTEGER NOT NULL DEFAULT 0,
+            short_chunk_count INTEGER NOT NULL DEFAULT 0,
+            long_chunk_count INTEGER NOT NULL DEFAULT 0,
+            empty_chunk_count INTEGER NOT NULL DEFAULT 0,
+            duplicate_chunk_count INTEGER NOT NULL DEFAULT 0,
+            duplicate_document_id BIGINT,
+            issue_count INTEGER NOT NULL DEFAULT 0,
+            analysis_summary TEXT,
+            failure_reason TEXT,
+            approved_by_user_id BIGINT,
+            approved_at TIMESTAMP,
+            imported_document_id BIGINT,
+            decision_reason VARCHAR(255),
+            topic_fit_status VARCHAR(32),
+            topic_fit_score DECIMAL(5,2),
+            topic_confidence DECIMAL(5,2),
+            topic_reason TEXT,
+            group_topic_keywords TEXT,
+            document_topic_keywords TEXT,
+            keyword_overlap_score DECIMAL(5,2),
+            semantic_similarity_score DECIMAL(5,2),
+            mismatch_indicators TEXT,
+            suggested_target_group_id BIGINT,
+            suggested_target_group_name VARCHAR(128),
+            created_at TIMESTAMP NOT NULL DEFAULT now(),
+            updated_at TIMESTAMP NOT NULL DEFAULT now(),
+            CONSTRAINT fk_readiness_item_batch FOREIGN KEY (batch_id) REFERENCES document_readiness_batches (id) ON DELETE CASCADE,
+            CONSTRAINT fk_readiness_item_group FOREIGN KEY (group_id) REFERENCES groups (id),
+            CONSTRAINT fk_readiness_item_recommended_group FOREIGN KEY (recommended_group_id) REFERENCES groups (id),
+            CONSTRAINT fk_readiness_item_duplicate_document FOREIGN KEY (duplicate_document_id) REFERENCES documents (id),
+            CONSTRAINT fk_readiness_item_imported_document FOREIGN KEY (imported_document_id) REFERENCES documents (id),
+            CONSTRAINT fk_readiness_item_approver FOREIGN KEY (approved_by_user_id) REFERENCES users (id)
+        )
+    </update>
+
+    <update id="createIssuesTable">
+        CREATE TABLE IF NOT EXISTS document_readiness_issues (
+            id BIGSERIAL PRIMARY KEY,
+            batch_id BIGINT NOT NULL,
+            item_id BIGINT NOT NULL,
+            issue_type VARCHAR(64) NOT NULL,
+            severity VARCHAR(16) NOT NULL,
+            message VARCHAR(512) NOT NULL,
+            suggestion VARCHAR(512) NOT NULL DEFAULT '',
+            created_at TIMESTAMP NOT NULL DEFAULT now(),
+            CONSTRAINT fk_readiness_issue_batch FOREIGN KEY (batch_id) REFERENCES document_readiness_batches (id) ON DELETE CASCADE,
+            CONSTRAINT fk_readiness_issue_item FOREIGN KEY (item_id) REFERENCES document_readiness_items (id) ON DELETE CASCADE
+        )
+    </update>
+
+    <update id="createBatchesGroupStatusIndex">
+        CREATE INDEX IF NOT EXISTS idx_readiness_batches_group_status
+            ON document_readiness_batches (group_id, status, created_at DESC)
+    </update>
+
+    <update id="createBatchesOwnerCreatedIndex">
+        CREATE INDEX IF NOT EXISTS idx_readiness_batches_owner_created
+            ON document_readiness_batches (owner_user_id, created_at DESC)
+    </update>
+
+    <update id="createItemsBatchStatusIndex">
+        CREATE INDEX IF NOT EXISTS idx_readiness_items_batch_status
+            ON document_readiness_items (batch_id, readiness_status)
+    </update>
+
+    <update id="createItemsGroupHashIndex">
+        CREATE INDEX IF NOT EXISTS idx_readiness_items_group_hash
+            ON document_readiness_items (group_id, file_hash)
+    </update>
+
+    <update id="createIssuesItemIndex">
+        CREATE INDEX IF NOT EXISTS idx_readiness_issues_item
+            ON document_readiness_issues (item_id, severity)
+    </update>
+
+    <update id="addTopicFitStatusColumn">
+        ALTER TABLE document_readiness_items ADD COLUMN IF NOT EXISTS topic_fit_status VARCHAR(32)
+    </update>
+
+    <update id="addTopicFitScoreColumn">
+        ALTER TABLE document_readiness_items ADD COLUMN IF NOT EXISTS topic_fit_score DECIMAL(5,2)
+    </update>
+
+    <update id="addTopicConfidenceColumn">
+        ALTER TABLE document_readiness_items ADD COLUMN IF NOT EXISTS topic_confidence DECIMAL(5,2)
+    </update>
+
+    <update id="addTopicReasonColumn">
+        ALTER TABLE document_readiness_items ADD COLUMN IF NOT EXISTS topic_reason TEXT
+    </update>
+
+    <update id="addGroupTopicKeywordsColumn">
+        ALTER TABLE document_readiness_items ADD COLUMN IF NOT EXISTS group_topic_keywords TEXT
+    </update>
+
+    <update id="addDocumentTopicKeywordsColumn">
+        ALTER TABLE document_readiness_items ADD COLUMN IF NOT EXISTS document_topic_keywords TEXT
+    </update>
+
+    <update id="addKeywordOverlapScoreColumn">
+        ALTER TABLE document_readiness_items ADD COLUMN IF NOT EXISTS keyword_overlap_score DECIMAL(5,2)
+    </update>
+
+    <update id="addSemanticSimilarityScoreColumn">
+        ALTER TABLE document_readiness_items ADD COLUMN IF NOT EXISTS semantic_similarity_score DECIMAL(5,2)
+    </update>
+
+    <update id="addMismatchIndicatorsColumn">
+        ALTER TABLE document_readiness_items ADD COLUMN IF NOT EXISTS mismatch_indicators TEXT
+    </update>
+
+    <update id="addSuggestedTargetGroupIdColumn">
+        ALTER TABLE document_readiness_items ADD COLUMN IF NOT EXISTS suggested_target_group_id BIGINT
+    </update>
+
+    <update id="addSuggestedTargetGroupNameColumn">
+        ALTER TABLE document_readiness_items ADD COLUMN IF NOT EXISTS suggested_target_group_name VARCHAR(128)
+    </update>
+</mapper>

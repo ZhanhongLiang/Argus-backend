@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.argus.rag.document.readiness.mapper.DocumentReadinessItemMapper">
+
+    <select id="selectItemsByBatchId" resultType="com.argus.rag.document.readiness.model.entity.DocumentReadinessItemEntity">
+        select id,
+               batch_id as batchId,
+               group_id as groupId,
+               original_file_name as originalFileName,
+               file_ext as fileExt,
+               file_size as fileSize,
+               parse_status as parseStatus,
+               readiness_status as readinessStatus,
+               recommended_group_id as recommendedGroupId,
+               recommended_action as recommendedAction,
+               readiness_score as readinessScore,
+               readiness_grade as readinessGrade,
+               parseable,
+               chunk_count as chunkCount,
+               avg_chunk_length as avgChunkLength,
+               short_chunk_count as shortChunkCount,
+               long_chunk_count as longChunkCount,
+               empty_chunk_count as emptyChunkCount,
+               duplicate_chunk_count as duplicateChunkCount,
+               duplicate_document_id as duplicateDocumentId,
+               issue_count as issueCount,
+               analysis_summary as analysisSummary,
+               failure_reason as failureReason,
+               imported_document_id as importedDocumentId,
+               decision_reason as decisionReason,
+               created_at as createdAt,
+               updated_at as updatedAt
+        from document_readiness_items
+        where batch_id = #{batchId}
+        order by id asc
+    </select>
+
+    <select id="selectImportableItems" resultType="com.argus.rag.document.readiness.model.entity.DocumentReadinessItemEntity">
+        select id,
+               batch_id as batchId,
+               group_id as groupId,
+               original_file_name as originalFileName,
+               file_ext as fileExt,
+               file_size as fileSize,
+               content_type as contentType,
+               file_hash as fileHash,
+               storage_bucket as storageBucket,
+               storage_object_key as storageObjectKey,
+               parse_status as parseStatus,
+               readiness_status as readinessStatus,
+               recommended_group_id as recommendedGroupId,
+               recommended_action as recommendedAction,
+               readiness_score as readinessScore,
+               readiness_grade as readinessGrade,
+               parseable,
+               chunk_count as chunkCount,
+               avg_chunk_length as avgChunkLength,
+               short_chunk_count as shortChunkCount,
+               long_chunk_count as longChunkCount,
+               empty_chunk_count as emptyChunkCount,
+               duplicate_chunk_count as duplicateChunkCount,
+               duplicate_document_id as duplicateDocumentId,
+               issue_count as issueCount,
+               analysis_summary as analysisSummary,
+               failure_reason as failureReason,
+               approved_by_user_id as approvedByUserId,
+               approved_at as approvedAt,
+               imported_document_id as importedDocumentId,
+               decision_reason as decisionReason,
+               created_at as createdAt,
+               updated_at as updatedAt
+        from document_readiness_items
+        where batch_id = #{batchId}
+          and imported_document_id is null
+          and readiness_status in ('RECOMMENDED', 'APPROVED')
+          and recommended_action in ('IMPORT_TO_TARGET_GROUP', 'IMPORT_TO_RECOMMENDED_GROUP')
+        order by id asc
+    </select>
+</mapper>

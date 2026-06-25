@@ -1,0 +1,15 @@
+package com.argus.rag.document.readiness.model.dto;
+
+import org.springframework.web.multipart.MultipartFile;
+
+public class AddReadinessItemRequest {
+    private MultipartFile file;
+
+    public MultipartFile getFile() {
+        return file;
+    }
+
+    public void setFile(MultipartFile file) {
+        this.file = file;
+    }
+}

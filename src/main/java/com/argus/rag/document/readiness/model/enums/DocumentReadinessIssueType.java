@@ -1,0 +1,15 @@
+package com.argus.rag.document.readiness.model.enums;
+
+public enum DocumentReadinessIssueType {
+    UNSUPPORTED_EXTENSION,
+    PARSE_FAILED,
+    NO_EXTRACTED_TEXT,
+    VERY_SHORT_TEXT,
+    TOO_MANY_EMPTY_CHUNKS,
+    TOO_MANY_SHORT_CHUNKS,
+    EXCESSIVE_DUPLICATE_CHUNKS,
+    DUPLICATE_FILE_HASH,
+    POSSIBLE_OLD_VERSION,
+    LOW_TOPIC_SUITABILITY,
+    SUSPECTED_SCANNED_PDF
+}
